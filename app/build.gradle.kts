@@ -52,4 +52,7 @@ dependencies {
     // navigation
     implementation(libs.navigation.fragment)
     implementation(libs.navigation.ui)
+
+    //dexter
+    implementation(libs.dexter)
 }
