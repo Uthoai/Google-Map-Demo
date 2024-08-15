@@ -3,10 +3,12 @@ package com.googlemapdemo
 import android.Manifest
 import android.app.DatePickerDialog
 import android.content.Intent
+import android.graphics.Bitmap
 import android.icu.util.Calendar
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.Settings
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
@@ -31,6 +33,11 @@ class AddPlaceFragment : Fragment(), View.OnClickListener {
     private var calendar = Calendar.getInstance()
     private lateinit var dateSetListener: DatePickerDialog.OnDateSetListener
 
+    companion object {
+        private const val GALLERY_REQUEST_CODE = 200
+        private const val CAMERA_REQUEST_CODE = 300
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -52,6 +59,7 @@ class AddPlaceFragment : Fragment(), View.OnClickListener {
     }
 
 
+    // Handle toolbar navigation click
     @Suppress("DEPRECATION")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -69,10 +77,10 @@ class AddPlaceFragment : Fragment(), View.OnClickListener {
         toolbar.setNavigationOnClickListener {
             requireActivity().onBackPressed()
         }
-
     }
 
 
+    // Handle button clicks
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onClick(view: View?) {
         when (view?.id) {
@@ -102,11 +110,7 @@ class AddPlaceFragment : Fragment(), View.OnClickListener {
 
                         1 -> {
                             // Handle camera selection
-                            Toast.makeText(
-                                requireContext(),
-                                "Capture photo from camera",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            photoCaptureFromCamera()
                         }
                     }
                 }
@@ -117,21 +121,18 @@ class AddPlaceFragment : Fragment(), View.OnClickListener {
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private fun choosePhotoFromGallery() {
-        // Implement the logic to choose a photo from the gallery
+    private fun photoCaptureFromCamera() {
+        // Implement the logic to capture a photo from the camera
         Dexter.withContext(requireContext()).withPermissions(
             Manifest.permission.READ_MEDIA_IMAGES,
             Manifest.permission.CAMERA,
         ).withListener(object : MultiplePermissionsListener {
+            // Handle permission granted
             override fun onPermissionsChecked(report: MultiplePermissionsReport?) {
-                // Check if all permissions are granted
                 if (report!!.areAllPermissionsGranted()) {
-                    // Handle the selected photo
-                    Toast.makeText(
-                        requireContext(),
-                        "all permission are granted",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    // Handle the camera intent
+                    val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                    startActivityForResult(cameraIntent, CAMERA_REQUEST_CODE)
                 } else {
                     Toast.makeText(
                         requireContext(),
@@ -140,12 +141,43 @@ class AddPlaceFragment : Fragment(), View.OnClickListener {
                     ).show()
                 }
             }
-
+            // Handle permission denial
             override fun onPermissionRationaleShouldBeShown(
                 permissions: MutableList<PermissionRequest>,
                 token: PermissionToken
             ) {
-                // Handle permission denial
+                showRationalDialogForPermission()
+            }
+        }).onSameThread().check()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun choosePhotoFromGallery() {
+        // Implement the logic to choose a photo from the gallery
+        Dexter.withContext(requireContext()).withPermissions(
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.CAMERA,
+        ).withListener(object : MultiplePermissionsListener {
+            // Handle permission granted
+            override fun onPermissionsChecked(report: MultiplePermissionsReport?) {
+                if (report!!.areAllPermissionsGranted()) {
+                    // Handle the selected photo
+                    val galleryIntent =
+                        Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+                    startActivityForResult(galleryIntent, GALLERY_REQUEST_CODE)
+                } else {
+                    Toast.makeText(
+                        requireContext(),
+                        "all permission are not granted",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            // Handle permission denial
+            override fun onPermissionRationaleShouldBeShown(
+                permissions: MutableList<PermissionRequest>,
+                token: PermissionToken
+            ) {
                 showRationalDialogForPermission()
             }
         }).onSameThread().check()
@@ -153,8 +185,10 @@ class AddPlaceFragment : Fragment(), View.OnClickListener {
 
     private fun showRationalDialogForPermission() {
         AlertDialog.Builder(requireContext())
-            .setMessage("It's looks you turned off permission required from Set Image," +
-                    " It can be enabled under Application Settings")
+            .setMessage(
+                "It's looks you turned off permission required from Set Image," +
+                        " It can be enabled under Application Settings"
+            )
             .setPositiveButton("GO TO SETTINGS") { _, _ ->
                 // Open the settings screen
                 try {
@@ -172,6 +206,31 @@ class AddPlaceFragment : Fragment(), View.OnClickListener {
             .show()
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode == AppCompatActivity.RESULT_OK) {
+            // Handle the selected photo
+            if (requestCode == GALLERY_REQUEST_CODE) {
+                if (data != null) {
+                    val contentURI = data.data
+                    try {
+                        val selectedImageBitmap = MediaStore.Images.Media.getBitmap(requireContext().contentResolver, contentURI)
+                        binding.ivPlaceHolder.setImageBitmap(selectedImageBitmap)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        Toast.makeText(requireContext(), "Failed to load image from gallery", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            // Handle the captured photo
+            else if (requestCode == CAMERA_REQUEST_CODE) {
+                val thumbnail: Bitmap? = data!!.extras!!.get("data") as Bitmap?
+                binding.ivPlaceHolder.setImageBitmap(thumbnail)
+            }
+        }
+    }
+
     private fun updateDateInView() {
         val myFormat = "dd/MM/yyyy"
         val sdf = SimpleDateFormat(myFormat, Locale.getDefault())
@@ -179,4 +238,5 @@ class AddPlaceFragment : Fragment(), View.OnClickListener {
     }
 
 }
+
 
